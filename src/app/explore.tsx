@@ -1,180 +1,323 @@
-import { Image } from 'expo-image';
-import { SymbolView } from 'expo-symbols';
-import { Platform, Pressable, ScrollView, StyleSheet } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
+import { useMemo, useState } from 'react';
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { ExternalLink } from '@/components/external-link';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Collapsible } from '@/components/ui/collapsible';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
+import { TransactionRow } from '@/features/dashboard/components/TransactionRow';
+import { useTransactionStore } from '@/features/transactions/store/transaction-store';
+import { colors } from '@/theme/colors';
+import { radius, spacing } from '@/theme/spacing';
 
-export default function TabTwoScreen() {
-  const safeAreaInsets = useSafeAreaInsets();
-  const insets = {
-    ...safeAreaInsets,
-    bottom: safeAreaInsets.bottom + BottomTabInset + Spacing.three,
-  };
-  const theme = useTheme();
+type Filter = 'All' | 'Income' | 'Expenses';
 
-  const contentPlatformStyle = Platform.select({
-    android: {
-      paddingTop: insets.top,
-      paddingLeft: insets.left,
-      paddingRight: insets.right,
-      paddingBottom: insets.bottom,
-    },
-    web: {
-      paddingTop: Spacing.six,
-      paddingBottom: Spacing.four,
-    },
-  });
+const filters: Filter[] = ['All', 'Income', 'Expenses'];
+
+export default function ActivityScreen() {
+  const router = useRouter();
+  const [search, setSearch] = useState('');
+  const [activeFilter, setActiveFilter] = useState<Filter>('All');
+
+  const allTransactions = useTransactionStore(
+    (state) => state.transactions,
+  );
+
+  const filteredTransactions = useMemo(() => {
+    const normalizedSearch = search.trim().toLowerCase();
+
+    return allTransactions.filter((transaction) => {
+      const matchesSearch =
+        transaction.merchant.toLowerCase().includes(normalizedSearch) ||
+        transaction.category.toLowerCase().includes(normalizedSearch);
+
+      const matchesFilter =
+        activeFilter === 'All' ||
+        (activeFilter === 'Income' && transaction.type === 'income') ||
+        (activeFilter === 'Expenses' && transaction.type === 'expense');
+
+      return matchesSearch && matchesFilter;
+    });
+  }, [allTransactions, search, activeFilter]);
 
   return (
-    <ScrollView
-      style={[styles.scrollView, { backgroundColor: theme.background }]}
-      contentInset={insets}
-      contentContainerStyle={[styles.contentContainer, contentPlatformStyle]}>
-      <ThemedView style={styles.container}>
-        <ThemedView style={styles.titleContainer}>
-          <ThemedText type="subtitle">Explore</ThemedText>
-          <ThemedText style={styles.centerText} themeColor="textSecondary">
-            This starter app includes example{'\n'}code to help you get started.
-          </ThemedText>
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+      >
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Go back to dashboard"
+          onPress={() => router.back()}
+          style={styles.backButton}
+        >
+          <Text style={styles.backText}>← Dashboard</Text>
+        </Pressable>
 
-          <ExternalLink href="https://docs.expo.dev" asChild>
-            <Pressable style={({ pressed }) => pressed && styles.pressed}>
-              <ThemedView type="backgroundElement" style={styles.linkButton}>
-                <ThemedText type="link">Expo documentation</ThemedText>
-                <SymbolView
-                  tintColor={theme.text}
-                  name={{ ios: 'arrow.up.right.square', android: 'link', web: 'link' }}
-                  size={12}
-                />
-              </ThemedView>
+        <Text style={styles.eyebrow}>YOUR FINANCES</Text>
+        <Text style={styles.title}>Activity</Text>
+        <Text style={styles.subtitle}>
+          Search and review your demo transactions.
+        </Text>
+
+        <View style={styles.searchContainer}>
+          <Text style={styles.searchIcon}>⌕</Text>
+          <TextInput
+            accessibilityLabel="Search transactions"
+            placeholder="Search transactions..."
+            placeholderTextColor={colors.textSecondary}
+            value={search}
+            onChangeText={setSearch}
+            autoCapitalize="none"
+            returnKeyType="search"
+            style={styles.searchInput}
+          />
+          {search.length > 0 && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Clear search"
+              onPress={() => setSearch('')}
+              hitSlop={8}
+            >
+              <Text style={styles.clearText}>✕</Text>
             </Pressable>
-          </ExternalLink>
-        </ThemedView>
+          )}
+        </View>
 
-        <ThemedView style={styles.sectionsWrapper}>
-          <Collapsible title="File-based routing">
-            <ThemedText type="small">
-              This app has two screens: <ThemedText type="code">src/app/index.tsx</ThemedText> and{' '}
-              <ThemedText type="code">src/app/explore.tsx</ThemedText>
-            </ThemedText>
-            <ThemedText type="small">
-              The layout file in <ThemedText type="code">src/app/_layout.tsx</ThemedText> sets up
-              the tab navigator.
-            </ThemedText>
-            <ExternalLink href="https://docs.expo.dev/router/introduction">
-              <ThemedText type="linkPrimary">Learn more</ThemedText>
-            </ExternalLink>
-          </Collapsible>
+        <View style={styles.filters}>
+          {filters.map((filter) => {
+            const selected = activeFilter === filter;
 
-          <Collapsible title="Android, iOS, and web support">
-            <ThemedView type="backgroundElement" style={styles.collapsibleContent}>
-              <ThemedText type="small">
-                You can open this project on Android, iOS, and the web. To open the web version,
-                press <ThemedText type="smallBold">w</ThemedText> in the terminal running this
-                project.
-              </ThemedText>
-              <Image
-                source={require('@/assets/images/tutorial-web.png')}
-                style={styles.imageTutorial}
+            return (
+              <Pressable
+                key={filter}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                onPress={() => setActiveFilter(filter)}
+                style={[
+                  styles.filterButton,
+                  selected && styles.filterButtonActive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.filterText,
+                    selected && styles.filterTextActive,
+                  ]}
+                >
+                  {filter}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        <View style={styles.listHeader}>
+          <Text style={styles.sectionTitle}>Transactions</Text>
+          <Text style={styles.count}>
+            {filteredTransactions.length} found
+          </Text>
+        </View>
+
+        <View style={styles.transactionCard}>
+          {filteredTransactions.length > 0 ? (
+            filteredTransactions.map((transaction) => (
+              <TransactionRow
+                key={transaction.id}
+                transaction={transaction}
               />
-            </ThemedView>
-          </Collapsible>
+            ))
+          ) : (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyTitle}>No transactions found</Text>
+              <Text style={styles.stateText}>
+                Try another search or change the filter.
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => {
+                  setSearch('');
+                  setActiveFilter('All');
+                }}
+                style={styles.resetButton}
+              >
+                <Text style={styles.retryText}>Clear filters</Text>
+              </Pressable>
+            </View>
+          )}
+        </View>
 
-          <Collapsible title="Images">
-            <ThemedText type="small">
-              For static images, you can use the <ThemedText type="code">@2x</ThemedText> and{' '}
-              <ThemedText type="code">@3x</ThemedText> suffixes to provide files for different
-              screen densities.
-            </ThemedText>
-            <Image source={require('@/assets/images/react-logo.png')} style={styles.imageReact} />
-            <ExternalLink href="https://reactnative.dev/docs/images">
-              <ThemedText type="linkPrimary">Learn more</ThemedText>
-            </ExternalLink>
-          </Collapsible>
-
-          <Collapsible title="Light and dark mode components">
-            <ThemedText type="small">
-              This template has light and dark mode support. The{' '}
-              <ThemedText type="code">useColorScheme()</ThemedText> hook lets you inspect what the
-              user&apos;s current color scheme is, and so you can adjust UI colors accordingly.
-            </ThemedText>
-            <ExternalLink href="https://docs.expo.dev/develop/user-interface/color-themes/">
-              <ThemedText type="linkPrimary">Learn more</ThemedText>
-            </ExternalLink>
-          </Collapsible>
-
-          <Collapsible title="Animations">
-            <ThemedText type="small">
-              This template includes an example of an animated component. The{' '}
-              <ThemedText type="code">src/components/ui/collapsible.tsx</ThemedText> component uses
-              the powerful <ThemedText type="code">react-native-reanimated</ThemedText> library to
-              animate opening this hint.
-            </ThemedText>
-          </Collapsible>
-        </ThemedView>
-        {Platform.OS === 'web' && <WebBadge />}
-      </ThemedView>
-    </ScrollView>
+        <Text style={styles.disclaimer}>
+          Demo data only · No real financial accounts connected
+        </Text>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  scrollView: {
+  safeArea: {
     flex: 1,
+    backgroundColor: colors.background,
   },
-  contentContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-  },
-  container: {
-    maxWidth: MaxContentWidth,
+  content: {
+    padding: spacing.lg,
+    paddingBottom: spacing.xxl,
     flexGrow: 1,
   },
-  titleContainer: {
-    gap: Spacing.three,
-    alignItems: 'center',
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.six,
+  backButton: {
+    alignSelf: 'flex-start',
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.xl,
   },
-  centerText: {
+  backText: {
+    color: colors.primary,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  eyebrow: {
+    color: colors.textSecondary,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 2,
+  },
+  title: {
+    color: colors.text,
+    fontSize: 30,
+    fontWeight: '800',
+    marginTop: spacing.xs,
+  },
+  subtitle: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    marginTop: spacing.sm,
+    marginBottom: spacing.xl,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    minHeight: 52,
+  },
+  searchIcon: {
+    color: colors.textSecondary,
+    fontSize: 24,
+    marginRight: spacing.sm,
+  },
+  searchInput: {
+    flex: 1,
+    color: colors.text,
+    fontSize: 14,
+    paddingVertical: spacing.md,
+  },
+  clearText: {
+    color: colors.textSecondary,
+    fontSize: 16,
+    padding: spacing.xs,
+  },
+  filters: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.lg,
+    marginBottom: spacing.xl,
+  },
+  filterButton: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  filterButtonActive: {
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.primary,
+  },
+  filterText: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  filterTextActive: {
+    color: colors.text,
+  },
+  listHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.md,
+  },
+  sectionTitle: {
+    color: colors.text,
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  count: {
+    color: colors.textSecondary,
+    fontSize: 11,
+  },
+  transactionCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  stateContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.xxl,
+    gap: spacing.md,
+  },
+  stateText: {
+    color: colors.textSecondary,
+    fontSize: 12,
     textAlign: 'center',
   },
-  pressed: {
-    opacity: 0.7,
+  errorCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    gap: spacing.sm,
   },
-  linkButton: {
-    flexDirection: 'row',
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.two,
-    borderRadius: Spacing.five,
-    justifyContent: 'center',
-    gap: Spacing.one,
+  errorText: {
+    color: colors.danger,
+    fontSize: 12,
+  },
+  retryText: {
+    color: colors.primary,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  emptyState: {
     alignItems: 'center',
+    paddingVertical: spacing.xxl,
+    gap: spacing.md,
   },
-  sectionsWrapper: {
-    gap: Spacing.five,
-    paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.three,
+  emptyTitle: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '700',
   },
-  collapsibleContent: {
-    alignItems: 'center',
+  resetButton: {
+    padding: spacing.sm,
   },
-  imageTutorial: {
-    width: '100%',
-    aspectRatio: 296 / 171,
-    borderRadius: Spacing.three,
-    marginTop: Spacing.two,
-  },
-  imageReact: {
-    width: 100,
-    height: 100,
-    alignSelf: 'center',
+  disclaimer: {
+    color: colors.textSecondary,
+    fontSize: 10,
+    textAlign: 'center',
+    marginTop: spacing.xl,
   },
 });
