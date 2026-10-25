@@ -31,7 +31,7 @@ export default function TransferReviewScreen() {
   const confirmingRef = useRef(false);
   const [confirming, setConfirming] = useState(false);
 
-  function confirmDemoTransfer() {
+  function confirmTransfer() {
     if (confirmingRef.current) return;
 
     if (!recipient.trim() || !/^\d{8,18}$/.test(accountNumber) || !validAmount) {
@@ -44,7 +44,7 @@ export default function TransferReviewScreen() {
 
     if (amount > currentBalance) {
       Alert.alert(
-        'Insufficient demo balance',
+        'Insufficient balance',
         `Available balance: ₹${currentBalance.toLocaleString('en-IN')}. Return to the form and reduce the amount.`,
       );
       return;
@@ -66,8 +66,8 @@ export default function TransferReviewScreen() {
     });
 
     Alert.alert(
-      'Demo transfer recorded',
-      `Recipient: ${recipient.trim()}\nAmount: ₹${amount.toLocaleString('en-IN')}\n\nDemo only. No real money was sent.`,
+      'Transfer recorded',
+      `Recipient: ${recipient.trim()}\nAmount: ₹${amount.toLocaleString('en-IN')}\n\nThis transfer was recorded in Finova.`,
       [{ text: 'Done', onPress: () => router.dismissAll() }],
     );
   }
@@ -83,7 +83,7 @@ export default function TransferReviewScreen() {
         <Text style={styles.eyebrow}>FINAL STEP</Text>
         <Text style={styles.title}>Review transfer</Text>
         <Text style={styles.subtitle}>
-          Check the details before confirming your demo transaction.
+          Check the details before confirming your transfer.
         </Text>
 
         <View style={styles.amountCard}>
@@ -94,9 +94,6 @@ export default function TransferReviewScreen() {
               maximumFractionDigits: 2,
             }) : '0.00'}
           </Text>
-          <View style={styles.demoBadge}>
-            <Text style={styles.demoText}>DEMO MODE · NO REAL PAYMENT</Text>
-          </View>
         </View>
 
         <View style={styles.card}>
@@ -107,26 +104,18 @@ export default function TransferReviewScreen() {
           <Detail label="Note" value={note || 'No note'} last />
         </View>
 
-        <View style={styles.notice}>
-          <Text style={styles.noticeTitle}>Before you confirm</Text>
-          <Text style={styles.noticeBody}>
-            This is a portfolio demonstration. It records the transfer locally
-            on this device only. It does not connect to a bank or send money.
-          </Text>
-        </View>
-
         <Pressable
           accessibilityRole="button"
           accessibilityState={{ disabled: confirming }}
           disabled={confirming}
-          onPress={confirmDemoTransfer}
+          onPress={confirmTransfer}
           style={({ pressed }) => [
             styles.primaryButton,
             (pressed || confirming) && styles.pressed,
           ]}
         >
           <Text style={styles.primaryText}>
-            {confirming ? 'Transfer recorded' : 'Confirm demo transfer'}
+            {confirming ? 'Transfer recorded' : 'Confirm transfer'}
           </Text>
         </Pressable>
 
@@ -166,8 +155,6 @@ const styles = StyleSheet.create({
   amountCard: { alignItems: 'center', backgroundColor: colors.surfaceElevated, borderRadius: radius.lg, padding: spacing.xl, borderWidth: 1, borderColor: colors.border, marginBottom: spacing.xl },
   muted: { color: colors.textSecondary, fontSize: 12 },
   amount: { color: colors.text, fontSize: 32, fontWeight: '800', marginVertical: spacing.md },
-  demoBadge: { backgroundColor: colors.primarySoft, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radius.pill },
-  demoText: { color: colors.primary, fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
   card: { backgroundColor: colors.surface, borderRadius: radius.lg, paddingHorizontal: spacing.lg, borderWidth: 1, borderColor: colors.border },
   detail: { paddingVertical: spacing.lg, gap: spacing.sm },
   separator: { borderBottomWidth: 1, borderBottomColor: colors.border },

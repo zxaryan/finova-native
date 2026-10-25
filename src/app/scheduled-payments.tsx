@@ -1,0 +1,1065 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'expo-router';
+import {
+  ActivityIndicator,
+  Alert,
+  Modal,
+  TextInput,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { colors } from '@/theme/colors';
+import { radius, spacing } from '@/theme/spacing';
+
+type PaymentStatus = 'upcoming' | 'paid';
+
+type ScheduledPayment = {
+  id: string;
+  name: string;
+  category: string;
+  amount: number;
+  dueDate: string;
+  frequency: string;
+  icon: string;
+  status: PaymentStatus;
+};
+
+const STORAGE_KEY = 'finova-scheduled-payments-v1';
+
+const INITIAL_PAYMENTS: ScheduledPayment[] = [
+  {
+    id: 'rent',
+    name: 'House Rent',
+    category: 'Housing',
+    amount: 12000,
+    dueDate: '2026-11-01',
+    frequency: 'Monthly',
+    icon: '⌂',
+    status: 'upcoming',
+  },
+  {
+    id: 'electricity',
+    name: 'Electricity Bill',
+    category: 'Utilities',
+    amount: 1450,
+    dueDate: '2026-10-28',
+    frequency: 'Monthly',
+    icon: 'ϟ',
+    status: 'upcoming',
+  },
+  {
+    id: 'internet',
+    name: 'Internet',
+    category: 'Utilities',
+    amount: 799,
+    dueDate: '2026-10-30',
+    frequency: 'Monthly',
+    icon: '⌁',
+    status: 'upcoming',
+  },
+  {
+    id: 'streaming',
+    name: 'Streaming Subscription',
+    category: 'Entertainment',
+    amount: 299,
+    dueDate: '2026-10-27',
+    frequency: 'Monthly',
+    icon: '▷',
+    status: 'upcoming',
+  },
+];
+
+function formatCurrency(amount: number) {
+  return `₹${amount.toLocaleString('en-IN')}`;
+}
+
+function formatDate(date: string) {
+  const parsed = new Date(`${date}T12:00:00`);
+  return parsed.toLocaleDateString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+function daysUntil(date: string) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const due = new Date(`${date}T00:00:00`);
+  return Math.ceil((due.getTime() - today.getTime()) / 86400000);
+}
+
+export default function ScheduledPaymentsScreen() {
+  const router = useRouter();
+  const [payments, setPayments] = useState<ScheduledPayment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [formVisible, setFormVisible] = useState(false);
+  const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
+  const [formName, setFormName] = useState('');
+  const [formAmount, setFormAmount] = useState('');
+  const [formDate, setFormDate] = useState('');
+  const [formFrequency, setFormFrequency] = useState('Monthly');
+  const [formError, setFormError] = useState('');
+  const [savingNew, setSavingNew] = useState(false);
+
+  const loadPayments = useCallback(async () => {
+    try {
+      const saved = await AsyncStorage.getItem(STORAGE_KEY);
+
+      if (saved) {
+        const parsed: unknown = JSON.parse(saved);
+
+        if (Array.isArray(parsed)) {
+          setPayments(parsed as ScheduledPayment[]);
+        } else {
+          setPayments(INITIAL_PAYMENTS);
+        }
+      } else {
+        await AsyncStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify(INITIAL_PAYMENTS),
+        );
+        setPayments(INITIAL_PAYMENTS);
+      }
+    } catch {
+      Alert.alert(
+        'Unable to load payments',
+        'Your scheduled payments could not be loaded. Please try again.',
+      );
+      setPayments(INITIAL_PAYMENTS);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadPayments();
+  }, [loadPayments]);
+
+  const markPaid = (payment: ScheduledPayment) => {
+    if (payment.status === 'paid') {
+      Alert.alert('Already paid', `${payment.name} is already marked as paid.`);
+      return;
+    }
+
+    Alert.alert(
+      'Mark payment as paid?',
+      `Mark ${payment.name} (${formatCurrency(payment.amount)}) as paid? This only updates the app; it does not transfer money.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Mark as paid',
+          onPress: () => {
+            void (async () => {
+              setSavingId(payment.id);
+
+              const updated = payments.map((item) =>
+                item.id === payment.id
+                  ? { ...item, status: 'paid' as const }
+                  : item,
+              );
+
+              try {
+                await AsyncStorage.setItem(
+                  STORAGE_KEY,
+                  JSON.stringify(updated),
+                );
+                setPayments(updated);
+              } catch {
+                Alert.alert(
+                  'Could not save',
+                  'The payment status was not saved. Please try again.',
+                );
+              } finally {
+                setSavingId(null);
+              }
+            })();
+          },
+        },
+      ],
+    );
+  };
+
+
+
+  const editPayment = (payment: ScheduledPayment) => {
+    setEditingPaymentId(payment.id);
+    setFormName(payment.name);
+    setFormAmount(String(payment.amount));
+    setFormDate(payment.dueDate);
+    setFormFrequency(payment.frequency);
+    setFormError('');
+    setFormVisible(true);
+  };
+
+  const deletePayment = (payment: ScheduledPayment) => {
+    Alert.alert(
+      'Delete scheduled payment?',
+      `Remove "${payment.name}" from your schedule? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              const updated = payments.filter((item) => item.id !== payment.id);
+              setSavingId(payment.id);
+              try {
+                await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+                setPayments(updated);
+              } catch {
+                Alert.alert('Could not delete', 'Your changes were not saved. Please try again.');
+              } finally {
+                setSavingId(null);
+              }
+            })();
+          },
+        },
+      ],
+    );
+  };
+
+  const saveNewPayment = async () => {
+    const name = formName.trim();
+    const amount = Number(formAmount);
+    const date = formDate.trim();
+
+    if (!name) {
+      setFormError('Enter a payment name.');
+      return;
+    }
+    if (!formAmount.trim() || !Number.isFinite(amount) || amount <= 0) {
+      setFormError('Enter an amount greater than zero.');
+      return;
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      setFormError('Use the date format YYYY-MM-DD.');
+      return;
+    }
+
+    const parsedDate = new Date(`${date}T12:00:00`);
+    if (
+      Number.isNaN(parsedDate.getTime()) ||
+      parsedDate.toISOString().slice(0, 10) !== date
+    ) {
+      setFormError('Enter a valid calendar date.');
+      return;
+    }
+
+    if (editingPaymentId) {
+      const updated = payments.map((item) =>
+        item.id === editingPaymentId
+          ? {
+              ...item,
+              name,
+              amount: Math.round(amount * 100) / 100,
+              dueDate: date,
+              frequency: formFrequency,
+            }
+          : item,
+      );
+
+      setSavingNew(true);
+      setFormError('');
+      try {
+        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+        setPayments(updated);
+        setFormVisible(false);
+        setEditingPaymentId(null);
+        setFormName('');
+        setFormAmount('');
+        setFormDate('');
+        setFormFrequency('Monthly');
+      } catch {
+        setFormError('Could not update payment. Please try again.');
+      } finally {
+        setSavingNew(false);
+      }
+      return;
+    }
+
+    const newPayment: ScheduledPayment = {
+      id: `payment-${Date.now()}`,
+      name,
+      category: 'Personal',
+      amount: Math.round(amount * 100) / 100,
+      dueDate: date,
+      frequency: formFrequency,
+      icon: '₹',
+      status: 'upcoming',
+    };
+
+    const updated = [...payments, newPayment];
+    setSavingNew(true);
+    setFormError('');
+
+    try {
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      setPayments(updated);
+      setFormVisible(false);
+      setFormName('');
+      setFormAmount('');
+      setFormDate('');
+      setFormFrequency('Monthly');
+    } catch {
+      setFormError('Could not save payment. Please try again.');
+    } finally {
+      setSavingNew(false);
+    }
+  };
+
+  const upcoming = payments.filter((payment) => payment.status === 'upcoming');
+  const paid = payments.filter((payment) => payment.status === 'paid');
+  const upcomingTotal = upcoming.reduce(
+    (sum, payment) => sum + payment.amount,
+    0,
+  );
+
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.header}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            style={styles.backButton}
+            onPress={() => router.back()}
+          >
+            <Text style={styles.backText}>‹</Text>
+          </Pressable>
+
+          <View style={styles.headerCopy}>
+            <Text style={styles.eyebrow}>MANAGE YOUR MONEY</Text>
+            <Text style={styles.title}>Scheduled payments</Text>
+          </View>
+        </View>
+
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryLabel}>UPCOMING PAYMENTS</Text>
+          <Text style={styles.summaryAmount}>
+            {formatCurrency(upcomingTotal)}
+          </Text>
+          <View style={styles.summaryFooter}>
+            <View style={styles.summaryPill}>
+              <View style={styles.summaryDot} />
+              <Text style={styles.summaryPillText}>
+                {upcoming.length} remaining
+              </Text>
+            </View>
+            <Text style={styles.summaryHint}>Across all scheduled bills</Text>
+          </View>
+        </View>
+
+        <Pressable
+          accessibilityRole="button"
+          style={styles.addPaymentButton}
+          onPress={() => {
+            setEditingPaymentId(null);
+            setFormName('');
+            setFormAmount('');
+            setFormDate('');
+            setFormFrequency('Monthly');
+            setFormError('');
+            setFormVisible(true);
+          }}
+        >
+          <Text style={styles.addPaymentButtonText}>＋ Add payment</Text>
+        </Pressable>
+
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Upcoming</Text>
+          <Text style={styles.sectionCount}>{upcoming.length} payments</Text>
+        </View>
+
+        {loading ? (
+          <View style={styles.loading}>
+            <ActivityIndicator color={colors.primary} />
+            <Text style={styles.muted}>Loading scheduled payments…</Text>
+          </View>
+        ) : upcoming.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyTitle}>You're all caught up</Text>
+            <Text style={styles.muted}>
+              There are no upcoming payments in your schedule.
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.paymentList}>
+            {upcoming
+              .slice()
+              .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
+              .map((payment) => {
+                const days = daysUntil(payment.dueDate);
+
+                return (
+                  <View key={payment.id} style={styles.paymentCard}>
+                    <View style={styles.paymentTop}>
+                      <View style={styles.paymentIdentity}>
+                        <View style={styles.paymentIcon}>
+                          <Text style={styles.paymentIconText}>
+                            {payment.icon}
+                          </Text>
+                        </View>
+
+                        <View style={styles.paymentCopy}>
+                          <Text style={styles.paymentName}>
+                            {payment.name}
+                          </Text>
+                          <Text style={styles.paymentCategory}>
+                            {payment.category} · {payment.frequency}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <Text style={styles.paymentAmount}>
+                        {formatCurrency(payment.amount)}
+                      </Text>
+                    </View>
+
+                    <View style={styles.paymentDivider} />
+
+                    <View style={styles.paymentBottom}>
+                      <View>
+                        <Text style={styles.dueLabel}>DUE DATE</Text>
+                        <Text style={styles.dueDate}>
+                          {formatDate(payment.dueDate)}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.dueHint,
+                            days < 0 && styles.overdueText,
+                            days === 0 && styles.todayText,
+                          ]}
+                        >
+                          {days < 0
+                            ? `${Math.abs(days)} day(s) overdue`
+                            : days === 0
+                              ? 'Due today'
+                              : days === 1
+                                ? 'Due tomorrow'
+                                : `Due in ${days} days`}
+                        </Text>
+                      </View>
+
+                      <View style={styles.paymentActions}>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={`Edit ${payment.name}`}
+                          style={styles.editButton}
+                          onPress={() => editPayment(payment)}
+                        >
+                          <Text style={styles.editButtonText}>Edit</Text>
+                        </Pressable>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={`Delete ${payment.name}`}
+                          style={styles.deleteButton}
+                          disabled={savingId === payment.id}
+                          onPress={() => deletePayment(payment)}
+                        >
+                          <Text style={styles.deleteButtonText}>Delete</Text>
+                        </Pressable>
+                      </View>
+
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`Mark ${payment.name} as paid`}
+                        disabled={savingId === payment.id}
+                        style={[
+                          styles.paidButton,
+                          savingId === payment.id && styles.disabledButton,
+                        ]}
+                        onPress={() => markPaid(payment)}
+                      >
+                        {savingId === payment.id ? (
+                          <ActivityIndicator
+                            size="small"
+                            color={colors.white}
+                          />
+                        ) : (
+                          <Text style={styles.paidButtonText}>Mark paid</Text>
+                        )}
+                      </Pressable>
+                    </View>
+                  </View>
+                );
+              })}
+          </View>
+        )}
+
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Payment history</Text>
+          <Text style={styles.sectionCount}>{paid.length} paid</Text>
+        </View>
+
+        {paid.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <Text style={styles.muted}>
+              Payments you mark as paid will appear here.
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.paymentList}>
+            {paid.map((payment) => (
+              <View key={payment.id} style={styles.historyCard}>
+                <View style={styles.historyIcon}>
+                  <Text style={styles.historyCheck}>✓</Text>
+                </View>
+                <View style={styles.historyCopy}>
+                  <Text style={styles.paymentName}>{payment.name}</Text>
+                  <Text style={styles.paymentCategory}>
+                    {formatDate(payment.dueDate)} · Marked paid
+                  </Text>
+                </View>
+                <Text style={styles.historyAmount}>
+                  {formatCurrency(payment.amount)}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+
+        <Modal
+          visible={formVisible}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setFormVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>{editingPaymentId ? "Edit scheduled payment" : "Add scheduled payment"}</Text>
+              <Text style={styles.modalSubtitle}>
+                Add a bill or reminder to your local schedule.
+              </Text>
+
+              <Text style={styles.inputLabel}>PAYMENT NAME</Text>
+              <TextInput
+                value={formName}
+                onChangeText={setFormName}
+                placeholder="e.g. Phone bill"
+                placeholderTextColor={colors.textSecondary}
+                style={styles.formInput}
+                maxLength={60}
+                accessibilityLabel="Payment name"
+              />
+
+              <Text style={styles.inputLabel}>AMOUNT (₹)</Text>
+              <TextInput
+                value={formAmount}
+                onChangeText={setFormAmount}
+                placeholder="e.g. 999"
+                placeholderTextColor={colors.textSecondary}
+                style={styles.formInput}
+                keyboardType="decimal-pad"
+                accessibilityLabel="Payment amount in rupees"
+              />
+
+              <Text style={styles.inputLabel}>DUE DATE</Text>
+              <TextInput
+                value={formDate}
+                onChangeText={setFormDate}
+                placeholder="YYYY-MM-DD"
+                placeholderTextColor={colors.textSecondary}
+                style={styles.formInput}
+                maxLength={10}
+                accessibilityLabel="Due date in YYYY-MM-DD format"
+              />
+
+              <Text style={styles.inputLabel}>REPEAT</Text>
+              <View style={styles.frequencyRow}>
+                {['One-time', 'Weekly', 'Monthly', 'Yearly'].map((frequency) => (
+                  <Pressable
+                    key={frequency}
+                    onPress={() => setFormFrequency(frequency)}
+                    style={[
+                      styles.frequencyOption,
+                      formFrequency === frequency &&
+                        styles.frequencyOptionSelected,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.frequencyText,
+                        formFrequency === frequency &&
+                          styles.frequencyTextSelected,
+                      ]}
+                    >
+                      {frequency}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              {!!formError && (
+                <Text style={styles.formError}>{formError}</Text>
+              )}
+
+              <Pressable
+                accessibilityRole="button"
+                disabled={savingNew}
+                style={[
+                  styles.savePaymentButton,
+                  savingNew && styles.disabledButton,
+                ]}
+                onPress={() => void saveNewPayment()}
+              >
+                {savingNew ? (
+                  <ActivityIndicator color={colors.white} />
+                ) : (
+                  <Text style={styles.savePaymentButtonText}>
+                    Save payment
+                  </Text>
+                )}
+              </Pressable>
+
+              <Pressable
+                accessibilityRole="button"
+                style={styles.cancelButton}
+                onPress={() => {
+                  setFormVisible(false);
+                  setFormError('');
+                }}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </Pressable>
+            </View>
+          </View>
+        </Modal>
+
+        <Text style={styles.disclaimer}>
+          Scheduled payment preview · Payments are not processed
+        </Text>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  content: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xxl,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginBottom: spacing.xl,
+  },
+  backButton: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backText: {
+    color: colors.text,
+    fontSize: 32,
+    lineHeight: 36,
+    marginTop: -3,
+  },
+  headerCopy: {
+    flex: 1,
+  },
+  eyebrow: {
+    color: colors.textSecondary,
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 1.6,
+    marginBottom: spacing.xs,
+  },
+  title: {
+    color: colors.text,
+    fontSize: 22,
+    fontWeight: '800',
+  },
+  summaryCard: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    padding: spacing.xl,
+    marginBottom: spacing.xl,
+  },
+  summaryLabel: {
+    color: colors.textSecondary,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1.3,
+  },
+  summaryAmount: {
+    color: colors.text,
+    fontSize: 34,
+    fontWeight: '800',
+    marginTop: spacing.md,
+  },
+  summaryFooter: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginTop: spacing.lg,
+  },
+  summaryPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.primarySoft,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: radius.pill,
+  },
+  summaryDot: {
+    width: 6,
+    height: 6,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primary,
+  },
+  summaryPillText: {
+    color: colors.text,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  summaryHint: {
+    color: colors.textSecondary,
+    fontSize: 11,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+    marginTop: spacing.sm,
+  },
+  sectionTitle: {
+    color: colors.text,
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  sectionCount: {
+    color: colors.textSecondary,
+    fontSize: 11,
+  },
+  paymentList: {
+    gap: spacing.md,
+    marginBottom: spacing.xl,
+  },
+  paymentCard: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+  },
+  paymentTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  paymentIdentity: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    flex: 1,
+  },
+  paymentIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    backgroundColor: colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  paymentIconText: {
+    color: colors.primary,
+    fontSize: 23,
+    fontWeight: '700',
+  },
+  paymentCopy: {
+    flex: 1,
+  },
+  paymentName: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  paymentCategory: {
+    color: colors.textSecondary,
+    fontSize: 10,
+    marginTop: 5,
+  },
+  paymentAmount: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  paymentDivider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginVertical: spacing.md,
+  },
+  paymentBottom: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  dueLabel: {
+    color: colors.textSecondary,
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 1,
+  },
+  dueDate: {
+    color: colors.text,
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 5,
+  },
+  dueHint: {
+    color: colors.textSecondary,
+    fontSize: 10,
+    marginTop: 4,
+  },
+  overdueText: {
+    color: colors.danger,
+  },
+  todayText: {
+    color: colors.primary,
+  },
+  paidButton: {
+    minHeight: 38,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  disabledButton: {
+    opacity: 0.6,
+  },
+  paidButtonText: {
+    color: colors.white,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  emptyCard: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.xl,
+    gap: spacing.xs,
+  },
+  emptyTitle: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  muted: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  loading: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.xxl,
+  },
+  historyCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+  },
+  historyIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.pill,
+    backgroundColor: '#173D38',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  historyCheck: {
+    color: colors.success,
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  historyCopy: {
+    flex: 1,
+  },
+  historyAmount: {
+    color: colors.success,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  addPaymentButton: {
+    backgroundColor: colors.primarySoft,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderRadius: radius.md,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.lg,
+  },
+  addPaymentButtonText: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.72)',
+    justifyContent: 'center',
+    padding: spacing.lg,
+  },
+  modalCard: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+  },
+  modalTitle: {
+    color: colors.text,
+    fontSize: 21,
+    fontWeight: '800',
+  },
+  modalSubtitle: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    marginTop: spacing.xs,
+    marginBottom: spacing.lg,
+  },
+  inputLabel: {
+    color: colors.textSecondary,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1,
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  formInput: {
+    backgroundColor: colors.background,
+    color: colors.text,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    fontSize: 14,
+  },
+  frequencyRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+  },
+  frequencyOption: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+  },
+  frequencyOptionSelected: {
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.primary,
+  },
+  frequencyText: {
+    color: colors.textSecondary,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  frequencyTextSelected: {
+    color: colors.text,
+  },
+  formError: {
+    color: colors.danger,
+    fontSize: 12,
+    marginTop: spacing.md,
+  },
+  savePaymentButton: {
+    backgroundColor: colors.primary,
+    borderRadius: radius.md,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    marginTop: spacing.lg,
+  },
+  savePaymentButtonText: {
+    color: colors.white,
+    fontWeight: '800',
+    fontSize: 14,
+  },
+  cancelButton: {
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+  },
+  cancelButtonText: {
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  paymentActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  editButton: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  editButtonText: {
+    color: colors.text,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  deleteButton: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.md,
+    backgroundColor: '#3A1D2A',
+  },
+  deleteButtonText: {
+    color: colors.danger,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  disclaimer: {
+    color: colors.textSecondary,
+    fontSize: 10,
+    textAlign: 'center',
+    marginTop: spacing.xl,
+  },
+});

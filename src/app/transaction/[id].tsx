@@ -1,37 +1,45 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import * as Clipboard from 'expo-clipboard';
+import { Alert, Share } from 'react-native';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { useTransactionStore } from '@/features/transactions/store/transaction-store';
 import { colors } from '@/theme/colors';
 import { radius, spacing } from '@/theme/spacing';
 
 export default function TransactionDetailsScreen() {
   const router = useRouter();
 
-  const params = useLocalSearchParams<{
-    id?: string;
-    merchant?: string;
-    category?: string;
-    amount?: string;
-    date?: string;
-    type?: string;
-    icon?: string;
-  }>();
+  const params = useLocalSearchParams<{ id?: string | string[] }>();
+  const id = Array.isArray(params.id) ? params.id[0] : params.id;
+  const transactions = useTransactionStore((state) => state.transactions);
+  const transaction = transactions.find((item) => item.id === id);
 
-  const getParam = (value: string | string[] | undefined) =>
-    Array.isArray(value) ? value[0] : value;
+  if (!transaction) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <StatusBar style="light" />
+        <View style={styles.notFound}>
+          <Text style={styles.notFoundTitle}>Transaction not found</Text>
+          <Text style={styles.dateText}>
+            This transaction may no longer exist or the link may be invalid.
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.replace('/explore')}
+            style={styles.button}
+          >
+            <Text style={styles.buttonText}>Back to activity</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
-  const id = getParam(params.id) ?? 'unknown';
-  const merchant = getParam(params.merchant) ?? 'Transaction';
-  const category = getParam(params.category) ?? 'Uncategorized';
-  const date = getParam(params.date) ?? 'Date unavailable';
-  const type = getParam(params.type) === 'income' ? 'income' : 'expense';
-  const icon = getParam(params.icon) ?? '₹';
-
-  const parsedAmount = Number(getParam(params.amount) ?? 0);
-  const amount = Number.isFinite(parsedAmount) ? parsedAmount : 0;
-  const isIncome = type === 'income';
+  const { merchant, category, date, icon, amount } = transaction;
+  const isIncome = transaction.type === 'income';
 
   const formattedAmount = `₹${amount.toLocaleString('en-IN', {
     minimumFractionDigits: 2,
@@ -70,7 +78,7 @@ export default function TransactionDetailsScreen() {
 
           <View style={styles.statusBadge}>
             <View style={styles.statusDot} />
-            <Text style={styles.statusText}>Demo transaction</Text>
+            <Text style={styles.statusText}>Recorded</Text>
           </View>
 
           <Text style={styles.dateText}>{date}</Text>
@@ -82,16 +90,60 @@ export default function TransactionDetailsScreen() {
           <DetailRow label="Merchant" value={merchant} />
           <DetailRow label="Category" value={category} />
           <DetailRow label="Transaction type" value={isIncome ? 'Income' : 'Expense'} />
-          <DetailRow label="Transaction ID" value={id} />
+          <DetailRow label="Transaction ID" value={transaction.id} />
           <DetailRow label="Date" value={date} last />
         </View>
 
-        <View style={styles.notice}>
-          <Text style={styles.noticeTitle}>Finova Demo</Text>
-          <Text style={styles.noticeText}>
-            This screen displays demonstration data. No real bank account,
-            payment, or transaction has been accessed or changed.
-          </Text>
+        <View style={styles.actionRow}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={async () => {
+              try {
+                await Clipboard.setStringAsync(transaction.id);
+                Alert.alert('Copied', 'Transaction ID copied to clipboard.');
+              } catch {
+                Alert.alert('Copy failed', 'Could not copy the transaction ID.');
+              }
+            }}
+            style={({ pressed }) => [
+              styles.secondaryButton,
+              pressed && styles.buttonPressed,
+            ]}
+          >
+            <Text style={styles.secondaryButtonText}>Copy Transaction ID</Text>
+          </Pressable>
+
+          <Pressable
+            accessibilityRole="button"
+            onPress={async () => {
+              const message = [
+                'Finova — Transaction Details',
+                `Merchant: ${merchant}`,
+                `Category: ${category}`,
+                `Amount: ${isIncome ? '+' : '-'}${formattedAmount}`,
+                `Type: ${isIncome ? 'Income' : 'Expense'}`,
+                `Date: ${date}`,
+                `Transaction ID: ${transaction.id}`,
+                '',
+                'Transaction details from Finova.',
+              ].join('\\n');
+
+              try {
+                await Share.share({
+                  title: 'Finova Transaction Details',
+                  message,
+                });
+              } catch {
+                Alert.alert('Share failed', 'Could not share transaction details.');
+              }
+            }}
+            style={({ pressed }) => [
+              styles.secondaryButton,
+              pressed && styles.buttonPressed,
+            ]}
+          >
+            <Text style={styles.secondaryButtonText}>Share Details</Text>
+          </Pressable>
         </View>
 
         <Pressable
@@ -125,6 +177,8 @@ function DetailRow({
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.background },
+  notFound: { flex: 1, justifyContent: 'center', padding: spacing.lg, gap: spacing.md },
+  notFoundTitle: { color: colors.text, fontSize: 22, fontWeight: '700', textAlign: 'center' },
   container: { padding: spacing.lg, paddingBottom: spacing.xxl },
   header: {
     flexDirection: 'row',
@@ -211,6 +265,28 @@ const styles = StyleSheet.create({
   detailBorder: { borderBottomWidth: 1, borderBottomColor: colors.border },
   detailLabel: { color: colors.textSecondary, fontSize: 12 },
   detailValue: { color: colors.text, fontSize: 14, fontWeight: '600' },
+  actionRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginTop: spacing.lg,
+  },
+  secondaryButton: {
+    flex: 1,
+    minHeight: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.surface,
+  },
+  secondaryButtonText: {
+    color: colors.primary,
+    fontSize: 12,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
   notice: {
     backgroundColor: colors.primarySoft,
     borderRadius: radius.md,

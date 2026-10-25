@@ -1,13 +1,15 @@
-import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { useCallback, useState } from 'react';
 
 import {
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  View,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -26,6 +28,33 @@ function formatCurrency(amount: number) {
 
 export default function DashboardScreen() {
   const router = useRouter();
+  const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+
+      async function loadUnreadStatus() {
+        try {
+          const saved = await AsyncStorage.getItem('finova-notifications-v1');
+          const items = saved ? JSON.parse(saved) : [];
+          const unread = Array.isArray(items) && items.some(
+            (item) => item && item.read === false
+          );
+
+          if (active) setHasUnreadNotifications(unread);
+        } catch {
+          if (active) setHasUnreadNotifications(false);
+        }
+      }
+
+      void loadUnreadStatus();
+
+      return () => {
+        active = false;
+      };
+    }, [])
+  );
 
   const displayedTransactions = useTransactionStore(
     (state) => state.transactions,
@@ -47,25 +76,32 @@ export default function DashboardScreen() {
             <Text style={styles.greeting}>Your money, in focus.</Text>
           </View>
 
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Open profile"
-            style={styles.avatar}
-            onPress={() =>
-              Alert.alert('Finova profile', 'Profile screen coming next.')
-            }
-          >
-            <Text style={styles.avatarText}>AP</Text>
-          </Pressable>
+          <View style={styles.headerActions}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Open notifications"
+              style={styles.notificationButton}
+              onPress={() => router.push('/notifications')}
+            >
+              <Ionicons name="notifications-outline" size={22} color={colors.text} />
+              {hasUnreadNotifications && <View style={styles.notificationDot} />}
+            </Pressable>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Open profile"
+              style={styles.avatar}
+              onPress={() => router.push('/profile')}
+            >
+              <Text style={styles.avatarText}>AP</Text>
+            </Pressable>
+          </View>
         </View>
 
         <View style={styles.balanceCard}>
           <View style={styles.balanceTop}>
             <Text style={styles.balanceLabel}>TOTAL BALANCE</Text>
-            <View style={styles.liveBadge}>
-              <View style={styles.liveDot} />
-              <Text style={styles.liveText}>DEMO</Text>
-            </View>
+
           </View>
 
           <Text style={styles.balance}>{formatCurrency(balance)}</Text>
@@ -103,9 +139,7 @@ export default function DashboardScreen() {
 
           <Pressable
             style={styles.action}
-            onPress={() =>
-              Alert.alert('Cards', 'Cards screen coming next.')
-            }
+            onPress={() => router.push('/cards')}
           >
             <View style={styles.actionIcon}>
               <Text style={styles.actionSymbol}>▤</Text>
@@ -125,22 +159,143 @@ export default function DashboardScreen() {
 
           <Pressable
             style={styles.action}
-            onPress={() =>
-              Alert.alert('Insights', 'Spending insights coming next.')
-            }
+            onPress={() => router.push('/analytics')}
           >
             <View style={styles.actionIcon}>
               <Text style={styles.actionSymbol}>⌁</Text>
             </View>
-            <Text style={styles.actionLabel}>Insights</Text>
+            <Text style={styles.actionLabel}>Analytics</Text>
           </Pressable>
         </View>
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Open savings goals"
+          onPress={() => router.push('/goals')}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            backgroundColor: colors.surface,
+            borderWidth: 1,
+            borderColor: colors.border,
+            borderRadius: radius.lg,
+            padding: spacing.lg,
+            marginBottom: spacing.md,
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+            <View
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: radius.md,
+                backgroundColor: colors.primarySoft,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Text style={{ color: colors.primary, fontSize: 22 }}>◎</Text>
+            </View>
+            <View>
+              <Text style={{ color: colors.text, fontSize: 14, fontWeight: '700' }}>
+                Savings goals
+              </Text>
+              <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 4 }}>
+                Track targets and build savings habits
+              </Text>
+            </View>
+          </View>
+          <Text style={{ color: colors.primary, fontSize: 22 }}>›</Text>
+        </Pressable>
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Open budgets"
+          onPress={() => router.push('/budgets')}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            backgroundColor: colors.surface,
+            borderWidth: 1,
+            borderColor: colors.border,
+            borderRadius: radius.lg,
+            padding: spacing.lg,
+            marginBottom: spacing.md,
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+            <View
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: radius.md,
+                backgroundColor: colors.primarySoft,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Text style={{ color: colors.primary, fontSize: 22 }}>◷</Text>
+            </View>
+            <View>
+              <Text style={{ color: colors.text, fontSize: 14, fontWeight: '700' }}>
+                Budgets
+              </Text>
+              <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 4 }}>
+                Set monthly limits and track spending
+              </Text>
+            </View>
+          </View>
+          <Text style={{ color: colors.primary, fontSize: 22 }}>›</Text>
+        </Pressable>
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Open scheduled payments"
+          onPress={() => router.push('/scheduled-payments')}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            backgroundColor: colors.surface,
+            borderWidth: 1,
+            borderColor: colors.border,
+            borderRadius: radius.lg,
+            padding: spacing.lg,
+            marginBottom: spacing.xl,
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+            <View
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: radius.md,
+                backgroundColor: colors.primarySoft,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Text style={{ color: colors.primary, fontSize: 22 }}>▦</Text>
+            </View>
+            <View>
+              <Text style={{ color: colors.text, fontSize: 14, fontWeight: '700' }}>
+                Scheduled payments
+              </Text>
+              <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 4 }}>
+                Manage upcoming bills and subscriptions
+              </Text>
+            </View>
+          </View>
+          <Text style={{ color: colors.primary, fontSize: 22 }}>›</Text>
+        </Pressable>
 
         <View style={styles.sectionHeader}>
           <View>
             <Text style={styles.sectionTitle}>Recent activity</Text>
             <Text style={styles.sectionSubtitle}>
-              Your latest demo transactions
+              Your latest transactions
             </Text>
           </View>
 
@@ -162,7 +317,7 @@ export default function DashboardScreen() {
         </View>
 
         <Text style={styles.disclaimer}>
-          Demo only · No real financial accounts connected
+          Your finances, all in one place
         </Text>
       </ScrollView>
     </SafeAreaView>
@@ -196,6 +351,34 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 21,
     fontWeight: '700',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  notificationButton: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  notificationBell: {
+    color: colors.text,
+    fontSize: 22,
+  },
+  notificationDot: {
+    position: 'absolute',
+    top: 9,
+    right: 9,
+    width: 7,
+    height: 7,
+    borderRadius: radius.pill,
+    backgroundColor: colors.danger,
   },
   avatar: {
     width: 46,

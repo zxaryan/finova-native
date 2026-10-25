@@ -47,9 +47,9 @@ export default function TransferScreen() {
     if (!amount.trim() || !Number.isFinite(numericAmount) || numericAmount <= 0) {
       nextErrors.amount = 'Enter an amount greater than ₹0.';
     } else if (numericAmount > 1000000) {
-      nextErrors.amount = 'Demo limit is ₹10,00,000.';
+      nextErrors.amount = 'Maximum transfer amount is ₹10,00,000.';
     } else if (numericAmount > balance) {
-      nextErrors.amount = 'Insufficient demo balance.';
+      nextErrors.amount = 'Insufficient balance.';
     }
 
     setErrors(nextErrors);
@@ -91,9 +91,8 @@ export default function TransferScreen() {
           </View>
 
           <View style={styles.balanceCard}>
-            <Text style={styles.muted}>Available demo balance</Text>
+            <Text style={styles.muted}>Available balance</Text>
             <Text style={styles.balance}>₹{balance.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
-            <Text style={styles.demoTag}>DEMO ACCOUNT</Text>
           </View>
 
           <Text style={styles.sectionTitle}>Recipient details</Text>
@@ -152,20 +151,12 @@ export default function TransferScreen() {
             />
           </View>
 
-          <View style={styles.notice}>
-            <Text style={styles.noticeTitle}>Safe demo mode</Text>
-            <Text style={styles.noticeText}>
-              This form validates input locally. Confirmed demo transfers are
-              saved on this device only. No banking API or real payment is used.
-            </Text>
-          </View>
-
           <Pressable
             accessibilityRole="button"
             onPress={submitTransfer}
             style={({ pressed }) => [styles.submitButton, pressed && styles.pressed]}
           >
-            <Text style={styles.submitText}>Review demo transfer</Text>
+            <Text style={styles.submitText}>Review transfer</Text>
           </Pressable>
 
           <Pressable
@@ -217,13 +208,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     marginTop: spacing.sm,
     marginBottom: spacing.md,
-  },
-  demoTag: {
-    alignSelf: 'flex-start',
-    color: colors.success,
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 1,
   },
   sectionTitle: {
     color: colors.text,
