@@ -1,5 +1,5 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useState } from 'react';
@@ -126,47 +126,55 @@ export default function DashboardScreen() {
 
         <Text style={styles.sectionTitle}>Quick actions</Text>
 
-        <View style={styles.actions}>
-          <Pressable
-            style={styles.action}
-            onPress={() => router.push('/transfer')}
-          >
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.actionsScroll}
+          contentContainerStyle={styles.actions}
+          nestedScrollEnabled
+        >
+          <Pressable style={styles.action} onPress={() => router.push('/transfer')}>
             <View style={styles.actionIcon}>
               <Text style={styles.actionSymbol}>↗</Text>
             </View>
             <Text style={styles.actionLabel}>Transfer</Text>
           </Pressable>
 
-          <Pressable
-            style={styles.action}
-            onPress={() => router.push('/cards')}
-          >
+          <Pressable style={styles.action} onPress={() => router.push('/deposit')}>
+            <View style={styles.actionIcon}>
+              <Ionicons name="add-circle-outline" size={22} color={colors.primary} />
+            </View>
+            <Text style={styles.actionLabel}>Deposit</Text>
+          </Pressable>
+
+          <Pressable style={styles.action} onPress={() => router.push('/withdraw')}>
+            <View style={styles.actionIcon}>
+              <Ionicons name="remove-circle-outline" size={22} color={colors.primary} />
+            </View>
+            <Text style={styles.actionLabel}>Withdraw</Text>
+          </Pressable>
+
+          <Pressable style={styles.action} onPress={() => router.push('/cards')}>
             <View style={styles.actionIcon}>
               <Text style={styles.actionSymbol}>▤</Text>
             </View>
             <Text style={styles.actionLabel}>My cards</Text>
           </Pressable>
 
-          <Pressable
-            style={styles.action}
-            onPress={() => router.push('/explore')}
-          >
+          <Pressable style={styles.action} onPress={() => router.push('/explore')}>
             <View style={styles.actionIcon}>
               <Text style={styles.actionSymbol}>↔</Text>
             </View>
             <Text style={styles.actionLabel}>Activity</Text>
           </Pressable>
 
-          <Pressable
-            style={styles.action}
-            onPress={() => router.push('/analytics')}
-          >
+          <Pressable style={styles.action} onPress={() => router.push('/analytics')}>
             <View style={styles.actionIcon}>
               <Text style={styles.actionSymbol}>⌁</Text>
             </View>
             <Text style={styles.actionLabel}>Analytics</Text>
           </Pressable>
-        </View>
+        </ScrollView>
 
         <Pressable
           accessibilityRole="button"
@@ -325,6 +333,12 @@ export default function DashboardScreen() {
 }
 
 const styles = StyleSheet.create({
+  actionsScroll: {
+    flexGrow: 0,
+    marginTop: spacing.lg,
+    marginBottom: spacing.xl,
+  },
+
   safeArea: {
     flex: 1,
     backgroundColor: colors.background,
@@ -479,16 +493,19 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '700',
   },
+
+
   actions: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: spacing.lg,
-    marginBottom: spacing.xl,
+    gap: spacing.md,
+    paddingRight: spacing.sm,
+    paddingBottom: spacing.xs,
   },
   action: {
+    width: 70,
+    flexShrink: 0,
     alignItems: 'center',
     gap: spacing.sm,
-    minWidth: 62,
   },
   actionIcon: {
     width: 54,
